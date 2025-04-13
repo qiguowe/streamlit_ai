@@ -37,20 +37,25 @@ def optimize_prompt(prompt):
     try:
         # 构建请求体
         body = json.dumps({
-            "prompt": f"请优化以下图片生成提示词，使其更加详细和专业：{prompt}",
+            "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 500,
-            "temperature": 0.7
+            "messages": [
+                {
+                    "role": "user",
+                    "content": f"请优化以下图片生成提示词，使其更加详细和专业。只返回优化后的提示词，不要有其他内容：\n\n{prompt}"
+                }
+            ]
         })
         
         # 调用 Bedrock API
         response = bedrock.invoke_model(
-            modelId="deepseek.deepseek-r1",
+            modelId="anthropic.claude-3-sonnet-20240229-v1:0",
             body=body
         )
         
         # 解析响应
         response_body = json.loads(response.get('body').read())
-        optimized_prompt = response_body.get('completion')
+        optimized_prompt = response_body.get('content')[0].get('text')
         return optimized_prompt
     except Exception as e:
         st.error(f"优化提示词时出错: {str(e)}")
@@ -66,22 +71,33 @@ def generate_image(prompt):
             
         # 构建请求体
         body = json.dumps({
-            "text_prompts": [{"text": english_prompt}],
-            "cfg_scale": 7,
-            "steps": 50,
-            "width": 1024,
-            "height": 1024
+            "taskType": "TEXT_IMAGE",
+            "textToImageParams": {
+                "text": english_prompt,
+                "negativeText": "poorly drawn, ugly, blurry, nsfw, nude, low quality, distorted, bad anatomy",
+                "height": 1024,
+                "width": 1024,
+                "cfgScale": 7,
+                "seed": 0
+            },
+            "imageGenerationConfig": {
+                "numberOfImages": 1,
+                "quality": "standard",
+                "height": 1024,
+                "width": 1024,
+                "cfgScale": 7
+            }
         })
         
         # 调用 Bedrock API
         response = bedrock.invoke_model(
-            modelId="amazon.nova-canvas-v1:0",
+            modelId="amazon.titan-image-generator-v1",
             body=body
         )
         
         # 解析响应
         response_body = json.loads(response.get('body').read())
-        image_data = response_body.get('artifacts')[0].get('base64')
+        image_data = response_body.get('images')[0]
         
         # 将 base64 转换为图片
         image_bytes = base64.b64decode(image_data)
@@ -101,22 +117,27 @@ def generate_video(prompt, duration=5, fps=24):
             
         # 构建请求体
         body = json.dumps({
-            "text_prompts": [{"text": english_prompt}],
-            "duration": duration,
-            "fps": fps,
+            "prompt": english_prompt,
+            "negative_prompt": "poorly drawn, ugly, blurry, nsfw, nude, low quality, distorted, bad anatomy",
+            "seed": 0,
+            "duration_in_seconds": duration,
+            "frame_rate": fps,
+            "decode_steps": 25,
             "width": 1024,
-            "height": 1024
+            "height": 1024,
+            "guidance_scale": 7.0,
+            "number_of_videos": 1
         })
         
         # 调用 Bedrock API
         response = bedrock.invoke_model(
-            modelId="amazon.nova-reel-v1:1",
+            modelId="amazon.titan-tg1-video-v1:0",
             body=body
         )
         
         # 解析响应
         response_body = json.loads(response.get('body').read())
-        video_data = response_body.get('artifacts')[0].get('base64')
+        video_data = response_body.get('videos')[0]
         
         # 将 base64 转换为视频文件
         video_bytes = base64.b64decode(video_data)
